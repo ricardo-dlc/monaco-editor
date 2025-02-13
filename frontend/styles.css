@@ -1,0 +1,35 @@
+/* Customize the tooltip container */
+.monaco-hover {
+  background-color: #1e1e1e; /* Dark background for better contrast */
+  color: #ffffff; /* White text */
+  border: 1px solid #444; /* Subtle border */
+  border-radius: 4px; /* Rounded corners */
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); /* Shadow for depth */
+  padding: 10px; /* Add padding */
+  font-family: "Fira Code", monospace; /* Monospace font for code-like look */
+  font-size: 14px; /* Adjust font size */
+}
+
+/* Adjust the inner content */
+.monaco-hover-content {
+  line-height: 1.5; /* Improve readability */
+  font-size: 14px; /* Ensure consistent font size */
+  max-width: 400px; /* Limit width for better layout */
+  white-space: pre-wrap; /* Preserve newlines and wrap long text */
+}
+
+/* Highlight keywords */
+.monaco-hover-content strong {
+  color: #ffa500; /* Orange for keywords */
+  font-weight: bold;
+}
+
+/* Links in tooltips */
+.monaco-hover-content a {
+  color: #4fc1ff; /* Light blue for links */
+  text-decoration: none;
+}
+
+.monaco-hover-content a:hover {
+  text-decoration: underline;
+}

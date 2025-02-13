@@ -1,13 +1,13 @@
-from flask import Flask, request
-from flask_cors import CORS
 import subprocess
 import jedi
+from flask import Flask, request
+from flask_cors import CORS
 
 app = Flask(__name__)
 CORS(app)  # Allow all origins; you can restrict to specific origins later
 
 
-@app.route('/autocomplete', methods=['POST'])
+@app.route("/autocomplete", methods=["POST"])
 def autocomplete():
     """Provide autocompletion suggestions using Jedi."""
     try:
@@ -26,14 +26,47 @@ def autocomplete():
         suggestions = [
             {
                 "label": completion.name,
-                "kind": "Function" if completion.type == "function" else "Variable",
+                "kind": "Function" if completion.type == "function" else "Variable",  # noqa E501
                 "documentation": completion.docstring(),
-                "insertText": completion.name
+                "insertText": completion.name,
             }
             for completion in completions
         ]
 
         return {"suggestions": suggestions}, 200
+
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.route("/hover", methods=["POST"])
+def hover():
+    """Provide hover information using Jedi."""
+    try:
+        # Get the code and cursor position from the request
+        data = request.json
+        code = data.get("code", "")
+        line = data.get("line", 1)  # 1-based index
+        column = data.get("column", 0)  # 0-based index
+
+        # Use Jedi to fetch hover documentation
+        script = jedi.Script(code)
+        definitions = script.goto(line=line, column=column)
+
+        # Format hover information
+        hover_info = [
+            {
+                "name": d.name,
+                "type": d.type,
+                "docstring": d.docstring(),
+                "line": d.line,
+                "column": d.column,
+            }
+            for d in definitions
+            if d.docstring()
+        ]
+
+        return {"hover": hover_info}, 200
 
     except Exception as e:
         return {"error": str(e)}, 500
