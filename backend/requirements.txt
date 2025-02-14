@@ -4,3 +4,4 @@ numpy
 pandas
 jedi
 jedi-language-server
+gunicorn

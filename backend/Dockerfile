@@ -4,8 +4,6 @@ WORKDIR /app
 
 COPY . .
 
-RUN pip install -r requirements.txt
-
 # Install system dependencies (Node.js, npm, and build essentials for Python packages)
 RUN apt-get update && apt-get install -y \
     curl \
@@ -17,6 +15,10 @@ RUN apt-get update && apt-get install -y \
 # Install Pyright using npm
 RUN npm install -g pyright
 
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
 EXPOSE 5000
 
-CMD ["python", "app.py"]
+# Use Gunicorn to serve the Flask app
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "app:app"]
