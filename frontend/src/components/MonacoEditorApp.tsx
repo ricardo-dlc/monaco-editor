@@ -1,32 +1,23 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useRef, useState } from "react";
-import Editor, { OnMount } from "@monaco-editor/react";
-import { editor } from "monaco-editor/esm/vs/editor/editor.api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import MonacoEditor, { type Monaco, type OnMount } from "@monaco-editor/react";
+import {
+  type editor,
+  type IMarkdownString,
+  type languages,
+  type Position,
+} from "monaco-editor/esm/vs/editor/editor.api";
+import { useRef, useState } from "react";
 
-type IStandaloneCodeEditor = editor.IStandaloneCodeEditor;
-
-// Define types for our backend responses
-interface AutocompleteResponse {
-  suggestions: {
-    label: string;
-    kind: string;
-    insertText: string;
-    documentation: string;
-  }[];
-}
-
-interface HoverResponse {
-  hover: {
-    name: string;
-    type: string;
-    docstring: string;
-  }[];
-}
+type Editor = editor.IStandaloneCodeEditor;
+type Model = editor.ITextModel;
+type CompletionItem = languages.CompletionItem;
+type CompletionList = languages.CompletionList;
+type CompletionItemKind = languages.CompletionItemKind;
+type Hover = languages.Hover;
 
 const MonacoEditorApp = () => {
-  const editorRef = useRef<IStandaloneCodeEditor | null>(null);
+  const editorRef = useRef<Editor | null>(null);
   const [output, setOutput] = useState<string>("");
   const defaultCode = `# Write Python code here\nprint('Hello, Monaco!')`;
 
@@ -40,17 +31,21 @@ const MonacoEditorApp = () => {
       });
       const result = await response.text();
       setOutput(result);
-    } catch (error: any) {
-      setOutput(`Error: ${error.message}`);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        setOutput(`Error: ${error.message}`);
+      } else {
+        setOutput(`An unknown error occurred`);
+      }
     }
   };
 
   // Editor will mount
-  const handleEditorDidMount: OnMount = (editor, monaco) => {
+  const handleEditorDidMount: OnMount = (editor: Editor, monaco: Monaco) => {
     editorRef.current = editor;
     // Register completion provider
     monaco.languages.registerCompletionItemProvider("python", {
-      async provideCompletionItems(model, position) {
+      async provideCompletionItems(model: Model, position: Position) {
         try {
           const response = await fetch("http://localhost:5000/autocomplete", {
             method: "POST",
@@ -62,20 +57,28 @@ const MonacoEditorApp = () => {
             }),
           });
 
-          const result: AutocompleteResponse = await response.json();
+          const result: CompletionList = await response.json();
 
           if (result.suggestions) {
+            const wordUntilPosition = model.getWordUntilPosition(position);
+            const range = {
+              startLineNumber: position.lineNumber,
+              endLineNumber: position.lineNumber,
+              startColumn: wordUntilPosition.startColumn,
+              endColumn: wordUntilPosition.endColumn,
+            };
             return {
-              suggestions: result.suggestions.map((suggestion) => ({
-                label: suggestion.label,
-                kind:
-                  monaco.languages.CompletionItemKind[
-                    suggestion.kind as keyof typeof monaco.languages.CompletionItemKind
-                  ] || monaco.languages.CompletionItemKind.Text,
-                insertText: suggestion.insertText,
-                documentation: suggestion.documentation,
-                range: model.getFullModelRange(),
-              })),
+              suggestions: result.suggestions.map(
+                (suggestion: CompletionItem) => ({
+                  label: suggestion.label,
+                  kind: (monaco.languages.CompletionItemKind[suggestion.kind] ||
+                    monaco.languages.CompletionItemKind
+                      .Text) as CompletionItemKind,
+                  insertText: suggestion.insertText,
+                  documentation: suggestion.documentation,
+                  range,
+                })
+              ),
             };
           }
         } catch (error) {
@@ -87,7 +90,7 @@ const MonacoEditorApp = () => {
 
     // Register hover provider
     monaco.languages.registerHoverProvider("python", {
-      async provideHover(model: any, position: any) {
+      async provideHover(model: Model, position: Position) {
         try {
           const response = await fetch("http://localhost:5000/hover", {
             method: "POST",
@@ -99,12 +102,15 @@ const MonacoEditorApp = () => {
             }),
           });
 
-          const result: HoverResponse = await response.json();
+          const result: Hover = await response.json();
 
-          if (result.hover?.length > 0) {
+          if (result.contents?.length > 0) {
             return {
-              contents: result.hover.map((h) => ({
-                value: `**${h.name} (${h.type})**\n\n${h.docstring}`,
+              contents: result.contents.map((h: IMarkdownString) => ({
+                value: h.value,
+                isTrusted: h.isTrusted,
+                supportThemeIcons: h.supportThemeIcons,
+                supportHtml: h.supportHtml,
               })),
             };
           }
@@ -120,7 +126,7 @@ const MonacoEditorApp = () => {
     <div className="container mx-auto p-4">
       <Card className="mb-4">
         <CardContent className="p-4">
-          <Editor
+          <MonacoEditor
             height="90vh"
             defaultLanguage="python"
             defaultValue={defaultCode}
@@ -130,7 +136,10 @@ const MonacoEditorApp = () => {
         </CardContent>
       </Card>
 
-      <Button onClick={handleRunCode} className="mb-4 bg-sky-300 cursor-pointer">
+      <Button
+        onClick={handleRunCode}
+        className="mb-4 bg-sky-300 cursor-pointer"
+      >
         Run Code
       </Button>
 
