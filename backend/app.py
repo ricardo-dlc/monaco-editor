@@ -1,6 +1,8 @@
 import subprocess
+
+import docstring_parser
 import jedi
-from flask import Flask, request
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 app = Flask(__name__)
@@ -16,7 +18,6 @@ def autocomplete():
         code = data.get("code", "")
         line = data.get("line", 1)  # 1-based index
         column = data.get("column", 0)  # 0-based index
-        print(f"Code: {code}\nLine: {line}, Column: {column}")
 
         # Use Jedi for autocompletion
         script = jedi.Script(code)
@@ -43,33 +44,77 @@ def autocomplete():
 def hover():
     """Provide hover information using Jedi."""
     try:
-        # Get the code and cursor position from the request
         data = request.json
         code = data.get("code", "")
-        line = data.get("line", 1)  # 1-based index
-        column = data.get("column", 0)  # 0-based index
+        line = data.get("line", 1)
+        column = data.get("column", 0)
 
-        # Use Jedi to fetch hover documentation
         script = jedi.Script(code)
-        definitions = script.goto(line=line, column=column)
+        definitions = script.infer(line=line, column=column)
 
-        # Format hover information
-        hover_info = [
-            {
-                "name": d.name,
-                "type": d.type,
-                "docstring": d.docstring(),
-                "line": d.line,
-                "column": d.column,
-            }
-            for d in definitions
-            if d.docstring()
-        ]
+        if not definitions:
+            return jsonify({"hover": None}), 200
 
-        return {"hover": hover_info}, 200
+        hover_content = []
+        for d in definitions:
+            docstring = d.docstring()
+            if docstring:
+                parsed_doc = docstring_parser.parse(docstring)
+
+                # Format function/class signature if available
+                markdown_doc = f"### `{d.name}` ({d.type})\n\n"
+
+                # Add the short and long descriptions while preserving newlines
+                if parsed_doc.short_description:
+                    markdown_doc += f"**{parsed_doc.short_description}**\n\n"
+                if parsed_doc.long_description:
+                    markdown_doc += f"{parsed_doc.long_description}\n\n"
+
+                if parsed_doc.params:
+                    markdown_doc += "**Parameters:**\n"
+                    for param in parsed_doc.params:
+                        param_name = param.arg_name
+                        param_type = param.type_name or "unknown"
+                        param_desc = param.description or ""
+
+                        # Format with indentation for multi-line descriptions
+                        formatted_desc = "\n  ".join(param_desc.split("\n"))
+                        markdown_doc += f"- **{param_name}** (`{param_type}`)\n\n  {formatted_desc}\n"
+
+                if parsed_doc.returns:
+                    markdown_doc += "\n**Returns:**\n"
+                    markdown_doc += f"- `{parsed_doc.returns.type_name}`: {parsed_doc.returns.description}\n"
+
+                # Extract and format examples properly
+                if parsed_doc.examples:
+                    markdown_doc += "\n**Examples:**\n\n"
+                    for example in parsed_doc.examples:
+                        example_code = (
+                            example.description.strip()
+                        )  # Extract example description
+                        snippet = (
+                            example.snippet.strip() if example.snippet else ""
+                        )  # Extract example snippet
+
+                        if example_code:
+                            markdown_doc += (
+                                f"{example_code}\n\n```python\n{snippet}\n```\n"
+                            )
+
+                hover_item = {
+                    "value": markdown_doc,
+                    "isTrusted": False,
+                    "supportThemeIcons": True,
+                    "supportHtml": False,
+                }
+
+                hover_content.append(hover_item)
+
+        return jsonify({"contents": hover_content}), 200
 
     except Exception as e:
-        return {"error": str(e)}, 500
+        print(e)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/run", methods=["POST"])

@@ -5,3 +5,4 @@ pandas
 jedi
 jedi-language-server
 gunicorn
+docstring_parser
